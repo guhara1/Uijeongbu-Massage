@@ -1,7 +1,12 @@
 # 메인 페이지 — 허브 역할. 모든 키워드를 밀어 넣지 않고 상세 페이지로 연결한다.
-from .site import (AREAS, BASE_URL, BRAND, PHONE, PHONE_DISPLAY, STATIONS,
-                   area_url, station_url)
+from .site import (AREAS, BASE_URL, BRAND, NAVER_SITE_VERIFICATION, PHONE,
+                   PHONE_DISPLAY, STATIONS, area_url, station_url)
 from .pricing import PRICING
+
+# 네이버 서치어드바이저 소유확인 — 메인페이지 head에만 삽입
+_NAVER_VERIFY = (
+    f'<meta name="naver-site-verification" content="{NAVER_SITE_VERIFICATION}">\n'
+)
 
 _AREA_CARDS = "".join(
     f'<li><a href="{area_url(slug)}">{name} 출장마사지</a></li>'
@@ -12,7 +17,7 @@ _STATION_CARDS = "".join(
     for slug, name in STATIONS
 )
 
-_JSONLD = f"""<link rel="preload" as="image" href="/assets/hero.webp" type="image/webp" fetchpriority="high">
+_JSONLD = f"""{_NAVER_VERIFY}<link rel="preload" as="image" href="/assets/hero.webp" type="image/webp" fetchpriority="high">
 <script type="application/ld+json">
 {{
   "@context": "https://schema.org",
