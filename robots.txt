@@ -1,4 +1,23 @@
+# 모든 검색엔진 크롤링 허용
 User-agent: *
 Allow: /
 
+User-agent: Googlebot
+Allow: /
+
+User-agent: Googlebot-Image
+Allow: /
+
+User-agent: Bingbot
+Allow: /
+
+# 네이버 검색 크롤러
+User-agent: Yeti
+Allow: /
+
+# 다음(카카오) 검색 크롤러
+User-agent: Daum
+Allow: /
+
 Sitemap: https://uijeongbu-massage.pages.dev/sitemap.xml
+Sitemap: https://uijeongbu-massage.pages.dev/rss.xml

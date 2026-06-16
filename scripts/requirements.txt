@@ -1,0 +1,4 @@
+# 구글 Indexing API 자동화(scripts/google_indexing.py) 전용 의존성.
+# IndexNow(scripts/indexnow.py)는 표준 라이브러리만 사용하므로 설치 불필요.
+google-auth>=2.0
+requests>=2.25

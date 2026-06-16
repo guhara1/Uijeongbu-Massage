@@ -8,6 +8,7 @@ content/ 패키지의 페이지 정의를 읽어 정적 HTML을 생성한다.
   - sitemap.xml 에는 index 허용 페이지만 포함
   - 모든 페이지에 WebPage·BreadcrumbList 구조화 데이터 자동 삽입
 """
+import datetime
 import html
 import json
 import os
@@ -18,8 +19,8 @@ import sys
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from content import PAGES
-from content.site import (BASE_URL, BRAND, BRAND_MARK, NAV, PHONE,
-                          PHONE_DISPLAY)
+from content.site import (BASE_URL, BRAND, BRAND_MARK, INDEXNOW_KEY, NAV,
+                          PHONE, PHONE_DISPLAY)
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 MIN_INDEX_CHARS = 2000
@@ -318,7 +319,7 @@ def render_page(page: dict) -> str:
 
 def build() -> None:
     report = []
-    sitemap_urls = []
+    sitemap_pages = []  # (url, title, desc)
 
     for page in PAGES:
         path = page["path"]  # "" 또는 "uijeongbu/.../" 형태
@@ -331,12 +332,23 @@ def build() -> None:
         chars = text_length(page["body"])
         noindex = page.get("noindex", False) or chars < MIN_INDEX_CHARS
         if not noindex:
-            sitemap_urls.append(BASE_URL.rstrip("/") + "/" + path)
+            url = BASE_URL.rstrip("/") + "/" + path
+            sitemap_pages.append((url, page["title"], page["desc"]))
         report.append((path or "/", chars, "noindex" if noindex else "index"))
 
-    # sitemap.xml
+    base = BASE_URL.rstrip("/")
+    host = re.sub(r"^https?://", "", base)
+    today = datetime.date.today().isoformat()
+    now_rfc = datetime.datetime.now(datetime.timezone.utc).strftime(
+        "%a, %d %b %Y %H:%M:%S +0000"
+    )
+
+    # sitemap.xml (lastmod 포함 — 색인 신선도 신호)
     urls = "\n".join(
-        f"  <url><loc>{u}</loc></url>" for u in sitemap_urls
+        f"  <url><loc>{u}</loc><lastmod>{today}</lastmod>"
+        f"<changefreq>weekly</changefreq>"
+        f"<priority>{'1.0' if u == base + '/' else '0.8'}</priority></url>"
+        for u, _, _ in sitemap_pages
     )
     with open(os.path.join(ROOT, "sitemap.xml"), "w", encoding="utf-8") as f:
         f.write(
@@ -345,14 +357,53 @@ def build() -> None:
             f"{urls}\n</urlset>\n"
         )
 
-    # robots.txt
-    with open(os.path.join(ROOT, "robots.txt"), "w", encoding="utf-8") as f:
+    # rss.xml (RSS 피드 — 구글·네이버 신규/갱신 콘텐츠 발견 가속)
+    items = "\n".join(
+        "  <item>\n"
+        f"    <title>{html.escape(title)}</title>\n"
+        f"    <link>{u}</link>\n"
+        f"    <guid isPermaLink=\"true\">{u}</guid>\n"
+        f"    <description>{html.escape(desc)}</description>\n"
+        f"    <pubDate>{now_rfc}</pubDate>\n"
+        "  </item>"
+        for u, title, desc in sitemap_pages
+    )
+    with open(os.path.join(ROOT, "rss.xml"), "w", encoding="utf-8") as f:
         f.write(
-            "User-agent: *\nAllow: /\n\n"
-            f"Sitemap: {BASE_URL.rstrip('/')}/sitemap.xml\n"
+            '<?xml version="1.0" encoding="UTF-8"?>\n'
+            '<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">\n'
+            "<channel>\n"
+            f"  <title>{html.escape(BRAND)} 의정부 출장마사지·홈타이 안내</title>\n"
+            f"  <link>{base}/</link>\n"
+            f'  <atom:link href="{base}/rss.xml" rel="self" type="application/rss+xml" />\n'
+            "  <description>의정부 출장마사지·홈타이 대표 행정동·역세권 예약 안내</description>\n"
+            "  <language>ko</language>\n"
+            f"  <lastBuildDate>{now_rfc}</lastBuildDate>\n"
+            f"{items}\n"
+            "</channel>\n</rss>\n"
         )
 
-    # .nojekyll (GitHub Pages)
+    # robots.txt — 구글봇·네이버(Yeti)·빙봇·다음봇 명시 허용, 사이트맵·RSS 안내
+    with open(os.path.join(ROOT, "robots.txt"), "w", encoding="utf-8") as f:
+        f.write(
+            "# 모든 검색엔진 크롤링 허용\n"
+            "User-agent: *\nAllow: /\n\n"
+            "User-agent: Googlebot\nAllow: /\n\n"
+            "User-agent: Googlebot-Image\nAllow: /\n\n"
+            "User-agent: Bingbot\nAllow: /\n\n"
+            "# 네이버 검색 크롤러\n"
+            "User-agent: Yeti\nAllow: /\n\n"
+            "# 다음(카카오) 검색 크롤러\n"
+            "User-agent: Daum\nAllow: /\n\n"
+            f"Sitemap: {base}/sitemap.xml\n"
+            f"Sitemap: {base}/rss.xml\n"
+        )
+
+    # IndexNow 키 파일 — 빙·네이버 즉시 색인 통보 인증용
+    with open(os.path.join(ROOT, f"{INDEXNOW_KEY}.txt"), "w", encoding="utf-8") as f:
+        f.write(INDEXNOW_KEY + "\n")
+
+    # .nojekyll (GitHub Pages / 정적 호스팅)
     open(os.path.join(ROOT, ".nojekyll"), "w").close()
 
     width = max(len(p) for p, _, _ in report)
@@ -360,7 +411,7 @@ def build() -> None:
     for p, c, r in sorted(report):
         flag = "" if (r == "noindex" or c >= MIN_INDEX_CHARS) else "  WARN"
         print(f"{p.ljust(width)}  {str(c).rjust(5)}  {r}{flag}")
-    print(f"\n{len(report)} pages built, {len(sitemap_urls)} in sitemap.")
+    print(f"\n{len(report)} pages built, {len(sitemap_pages)} in sitemap.")
 
 
 if __name__ == "__main__":

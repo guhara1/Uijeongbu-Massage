@@ -2,6 +2,10 @@
 # 배포 도메인 확정 후 BASE_URL 을 실제 도메인으로 변경하세요.
 BASE_URL = "https://uijeongbu-massage.pages.dev"
 
+# IndexNow 키 — 루트에 <INDEXNOW_KEY>.txt 파일로 게시된다.
+# 빙(Bing)·네이버(Naver)·얀덱스 등 IndexNow 참여 검색엔진에 즉시 색인을 통보할 때 사용.
+INDEXNOW_KEY = "6e36c313607143fbbb7e63b6555ddec75fe28dfca5024774b365dfb1c9348238"
+
 BRAND = "간다GO"
 BRAND_MARK = "GO"
 PHONE = "0508-202-4719"

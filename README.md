@@ -70,4 +70,64 @@ python3 build.py
 build.py            빌드 스크립트
 content/            페이지 정의 (site, main, areas_g1/g2, stations_g1/g2, info, pricing)
 assets/             style.css, nav.js, 파비콘/OG 이미지
+scripts/            색인 통보 스크립트 (indexnow, google_indexing)
+.github/workflows/  푸시 시 자동 색인 통보 (indexing.yml)
 ```
+
+## 검색 색인 / 빠른 인덱싱
+
+빌드 시 다음 색인 자산이 자동 생성됩니다.
+
+| 파일 | 용도 |
+|------|------|
+| `sitemap.xml` | 표준 사이트맵 (`lastmod`·`changefreq`·`priority` 포함) |
+| `rss.xml` | RSS 피드 — 구글·네이버 신규/갱신 콘텐츠 발견 가속 |
+| `robots.txt` | Googlebot·Bingbot·**Yeti(네이버)**·Daum 명시 허용 + 사이트맵·RSS 안내 |
+| `<INDEXNOW_KEY>.txt` | IndexNow 인증 키 파일 (루트 게시) |
+
+### 1) IndexNow — 빙·네이버 즉시 통보 (구글 미참여)
+
+키 파일이 도메인 루트에 게시된 상태에서:
+
+```bash
+python3 scripts/indexnow.py --all       # sitemap 전체 통보
+python3 scripts/indexnow.py --changed   # 직전 커밋 대비 변경분만 통보
+python3 scripts/indexnow.py <URL> ...   # 특정 URL 통보
+```
+
+한 번 통보하면 IndexNow 참여 검색엔진(빙·**네이버**·얀덱스 등)에 전파됩니다.
+별도 시크릿이 필요 없습니다.
+
+### 2) 구글 Indexing API — 구글 직접 통보
+
+1. Google Cloud에서 **Indexing API** 사용 설정 → 서비스 계정 생성 → JSON 키 발급
+2. **Search Console** 속성에 서비스 계정 이메일을 *소유자*로 추가
+3. 실행:
+
+```bash
+pip install -r scripts/requirements.txt
+export GOOGLE_APPLICATION_CREDENTIALS=서비스계정.json
+python3 scripts/google_indexing.py --all       # 또는 --changed / <URL>
+```
+
+> 참고: Indexing API는 공식적으로 JobPosting·BroadcastEvent용이며 일반 URL 통보는
+> 보장되지 않습니다. 구글 색인의 정식 경로는 **Search Console + 사이트맵 제출**이고,
+> 본 스크립트는 발견 가속용 보조 수단입니다.
+
+### 3) 자동화 — 푸시할 때마다 즉시 통보
+
+`.github/workflows/indexing.yml` 가 `main`/`master` 푸시 시(또는 수동 실행 시)
+배포 전파를 기다린 뒤 **변경된 URL만** IndexNow로 통보합니다. 구글 통보까지 켜려면
+저장소 시크릿 `GOOGLE_INDEXING_CREDENTIALS`(서비스 계정 JSON 전체)을 추가하세요.
+시크릿이 없으면 IndexNow만 동작하고 구글 단계는 자동으로 건너뜁니다.
+
+> Cloudflare Pages는 저장소에서 정적 파일을 그대로 배포하므로 별도 빌드 명령이
+> 필요 없습니다(이미 HTML이 커밋되어 있음). 워크플로의 `sleep`는 키 파일·신규
+> 페이지가 도메인에 반영될 시간을 확보하기 위한 것입니다.
+
+### 배포 후 1회 권장 작업
+
+1. **구글 Search Console** 속성 등록 → `sitemap.xml` 제출
+2. **네이버 서치어드바이저** 사이트 등록 → 사이트맵 `sitemap.xml`·RSS `rss.xml` 제출
+3. **빙 웹마스터 도구** 등록(IndexNow 키 자동 인식)
+4. 첫 통보: `python3 scripts/indexnow.py --all`

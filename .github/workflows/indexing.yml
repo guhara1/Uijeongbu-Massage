@@ -1,0 +1,63 @@
+name: Search Indexing (IndexNow + Google)
+
+# 글/페이지를 올리고 푸시할 때마다 변경된 URL을 검색엔진에 즉시 통보한다.
+# - IndexNow: 빙(Bing)·네이버(Naver)·얀덱스 — 시크릿 불필요
+# - Google Indexing API: 서비스 계정 시크릿(GOOGLE_INDEXING_CREDENTIALS)이 있을 때만 실행
+
+on:
+  push:
+    branches: [main, master]
+    paths:
+      - "**/index.html"
+      - "sitemap.xml"
+      - "rss.xml"
+  workflow_dispatch:
+    inputs:
+      scope:
+        description: "통보 범위"
+        type: choice
+        default: changed
+        options: [changed, all]
+
+permissions:
+  contents: read
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2   # --changed 의 HEAD~1 비교용
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Cloudflare Pages 배포 전파 대기
+        run: sleep 75   # 키 파일·신규 페이지가 도메인에 올라올 시간 확보
+
+      - name: IndexNow 통보 (Bing·Naver)
+        run: |
+          if [ "${{ github.event.inputs.scope }}" = "all" ]; then
+            python3 scripts/indexnow.py --all
+          else
+            python3 scripts/indexnow.py --changed
+          fi
+
+      - name: Google Indexing API 통보 (자격증명 있을 때만)
+        env:
+          GOOGLE_INDEXING_CREDENTIALS: ${{ secrets.GOOGLE_INDEXING_CREDENTIALS }}
+        run: |
+          if [ -z "$GOOGLE_INDEXING_CREDENTIALS" ]; then
+            echo "GOOGLE_INDEXING_CREDENTIALS 시크릿 미설정 — Google 통보 건너뜀(IndexNow는 완료)."
+            exit 0
+          fi
+          pip install -q -r scripts/requirements.txt
+          printf '%s' "$GOOGLE_INDEXING_CREDENTIALS" > /tmp/gsa.json
+          if [ "${{ github.event.inputs.scope }}" = "all" ]; then
+            python3 scripts/google_indexing.py --all --credentials /tmp/gsa.json
+          else
+            python3 scripts/google_indexing.py --changed --credentials /tmp/gsa.json
+          fi
+          rm -f /tmp/gsa.json
