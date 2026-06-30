@@ -1,5 +1,6 @@
 # 대표 행정동 페이지 — 그룹 2 (5곳)
 from .pricing import PRICING
+from .related import related_block
 from .site import PHONE, PHONE_DISPLAY, BRAND
 
 _CTA = f"""
@@ -17,8 +18,10 @@ def _area(slug, name, title, desc, body):
         "title": title,
         "desc": desc,
         "h1": f"{name} 출장마사지·홈타이 안내",
-        "body": body + PRICING + _CTA,
+        "body": body + related_block(slug) + PRICING + _CTA,
         "breadcrumb": [("지역별 안내", "/#areas"), (name, None)],
+        "service": True,
+        "sname": name,
     }
 
 

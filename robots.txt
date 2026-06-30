@@ -19,5 +19,5 @@ Allow: /
 User-agent: Daum
 Allow: /
 
-Sitemap: https://uijeongbu-massage.pages.dev/sitemap.xml
-Sitemap: https://uijeongbu-massage.pages.dev/rss.xml
+Sitemap: https://uijeongbu-massage.netlify.app/sitemap.xml
+Sitemap: https://uijeongbu-massage.netlify.app/rss.xml
