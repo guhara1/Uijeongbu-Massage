@@ -1,5 +1,6 @@
 # 의정부 역세권 페이지 (G1) — 10개 역. 역 이름만 바꾼 반복/노선·방향별 중복 페이지는 만들지 않는다.
 from .pricing import PRICING
+from .related import related_block
 from .site import PHONE, PHONE_DISPLAY, BRAND
 
 _CTA = f"""
@@ -17,8 +18,10 @@ def _station(slug, name, title, desc, body):
         "title": title,
         "desc": desc,
         "h1": f"{name} 출장마사지·홈타이 안내",
-        "body": body + PRICING + _CTA,
+        "body": body + related_block(slug) + PRICING + _CTA,
         "breadcrumb": [("지하철역별 안내", "/#stations"), (name, None)],
+        "service": True,
+        "sname": name,
     }
 
 

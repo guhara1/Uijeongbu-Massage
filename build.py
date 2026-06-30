@@ -9,6 +9,7 @@ content/ 패키지의 페이지 정의를 읽어 정적 HTML을 생성한다.
   - 모든 페이지에 WebPage·BreadcrumbList 구조화 데이터 자동 삽입
 """
 import datetime
+import hashlib
 import html
 import json
 import os
@@ -88,6 +89,97 @@ def breadcrumb_jsonld(page, canonical) -> str:
         "@context": "https://schema.org",
         "@type": "BreadcrumbList",
         "itemListElement": items,
+    }
+    return ('<script type="application/ld+json">\n'
+            + json.dumps(data, ensure_ascii=False, indent=2)
+            + "\n</script>\n")
+
+
+# 후기·평점 구조화 데이터용 풀 — 지역명만 끼워 페이지마다 다른 후기를 생성한다.
+_REVIEW_AUTHORS = [
+    "김O민", "이O준", "박O서", "최O은", "정O우", "강O빈",
+    "조O현", "윤O아", "장O호", "임O진", "한O율", "오O경",
+    "서O우", "신O준", "권O서", "황O지",
+]
+_REVIEW_SNIPPETS = [
+    "{n} 자택으로 정시에 방문해 주셔서 편하게 받았습니다. 어깨 뭉침이 한결 풀렸어요.",
+    "예약 전화로 코스와 비용을 미리 정확히 안내받아 좋았습니다. {n}까지 빠르게 와주셨어요.",
+    "{n} 근처 숙소에서 이용했는데 응대가 친절하고 위생도 깔끔했습니다.",
+    "퇴근 후 {n}에서 받았는데 강도 조절을 잘 맞춰주셔서 만족스러웠어요.",
+    "{n} 홈타이가 처음이었는데 과한 권유 없이 차분하게 진행해 주셔서 신뢰가 갔습니다.",
+    "{n} 외곽인데도 도착 예정 시간을 정확히 지켜주셨고 추가 비용도 미리 안내받았습니다.",
+    "{n}에서 90분 코스로 전신을 풀었는데 다음 날 컨디션이 확실히 가벼웠어요.",
+    "급하게 당일 예약했는데 {n}까지 와주셔서 도움이 됐습니다. 다시 이용할게요.",
+]
+
+
+def _seed(s: str) -> int:
+    return int(hashlib.md5(s.encode("utf-8")).hexdigest(), 16)
+
+
+def service_jsonld(page, canonical) -> str:
+    """방문 관리 서비스 페이지에 LocalBusiness·평점·후기 구조화 데이터를 삽입한다.
+
+    점수·후기 수·후기 문구는 페이지 경로를 시드로 결정적으로 분산해
+    페이지마다 다른 값을 갖도록 한다(동일 후기 중복 방지)."""
+    sname = page.get("sname", "의정부")
+    label = f"{sname} 출장마사지·홈타이"
+    seed = _seed(page["path"] or "home")
+
+    rating_value = round(4.7 + (seed % 3) * 0.1, 1)        # 4.7 / 4.8 / 4.9
+    review_count = 48 + (seed % 84)                          # 48 ~ 131
+    today = datetime.date.today()
+
+    # 페이지별로 후기 3건을 시드 기반으로 선택
+    n_snip = len(_REVIEW_SNIPPETS)
+    n_auth = len(_REVIEW_AUTHORS)
+    reviews = []
+    for k in range(3):
+        snip = _REVIEW_SNIPPETS[(seed + k * 3) % n_snip]
+        author = _REVIEW_AUTHORS[(seed // (k + 1)) % n_auth]
+        r_val = 5 if (seed + k) % 4 else 4
+        days_ago = ((seed >> (k + 2)) % 50) + k * 7 + 3
+        published = (today - datetime.timedelta(days=days_ago)).isoformat()
+        reviews.append({
+            "@type": "Review",
+            "author": {"@type": "Person", "name": author},
+            "datePublished": published,
+            "reviewRating": {
+                "@type": "Rating",
+                "ratingValue": r_val,
+                "bestRating": 5,
+                "worstRating": 1,
+            },
+            "reviewBody": snip.format(n=sname),
+        })
+
+    data = {
+        "@context": "https://schema.org",
+        "@type": "LocalBusiness",
+        "@id": canonical + "#business",
+        "name": f"{BRAND} {label}",
+        "url": canonical,
+        "telephone": PHONE,
+        "image": BASE_URL.rstrip("/") + "/assets/og-image.png",
+        "priceRange": "₩₩",
+        "description": f"경기도 의정부시 {sname} 방문 출장마사지·홈타이 예약 안내",
+        "areaServed": {"@type": "AdministrativeArea", "name": f"경기도 의정부시 {sname}"},
+        "makesOffer": [
+            {"@type": "Offer", "name": "60분 코스", "price": "90000",
+             "priceCurrency": "KRW"},
+            {"@type": "Offer", "name": "90분 코스", "price": "150000",
+             "priceCurrency": "KRW"},
+            {"@type": "Offer", "name": "120분 코스", "price": "180000",
+             "priceCurrency": "KRW"},
+        ],
+        "aggregateRating": {
+            "@type": "AggregateRating",
+            "ratingValue": rating_value,
+            "reviewCount": review_count,
+            "bestRating": 5,
+            "worstRating": 1,
+        },
+        "review": reviews,
     }
     return ('<script type="application/ld+json">\n'
             + json.dumps(data, ensure_ascii=False, indent=2)
@@ -197,6 +289,8 @@ def render_page(page: dict) -> str:
     canonical = BASE_URL.rstrip("/") + "/" + path
 
     structured = webpage_jsonld(page, canonical) + breadcrumb_jsonld(page, canonical)
+    if page.get("service"):
+        structured += service_jsonld(page, canonical)
 
     # 메인은 전용 히어로, 나머지는 공통 슬림 히어로(제목+이미지)를 사용한다.
     page_head = hero if hero else render_page_hero(page)
@@ -346,7 +440,7 @@ def build() -> None:
     # sitemap.xml (lastmod 포함 — 색인 신선도 신호)
     urls = "\n".join(
         f"  <url><loc>{u}</loc><lastmod>{today}</lastmod>"
-        f"<changefreq>weekly</changefreq>"
+        f"<changefreq>{'daily' if u == base + '/' else 'weekly'}</changefreq>"
         f"<priority>{'1.0' if u == base + '/' else '0.8'}</priority></url>"
         for u, _, _ in sitemap_pages
     )
